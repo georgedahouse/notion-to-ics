@@ -1,0 +1,14 @@
+{
+  "name": "notion-to-ics",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.1",
+    "express": "^4.18.2",
+    "ical-generator": "^3.6.0",
+    "dotenv": "^16.0.3"
+  }
+}
