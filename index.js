@@ -12,46 +12,51 @@ const dateProperty = process.env.DATE_PROPERTY_NAME || "Datum";
 const titleProperty = process.env.TITLE_PROPERTY_NAME || "Návyk";
 
 app.get("/calendar.ics", async (req, res) => {
-    const calendar = ical({ name: "Notion Habits" });
+  const calendar = ical({ name: "Notion Habits" });
 
-    try {
-        const response = await notion.databases.query({ database_id: databaseId });
+  try {
+    const response = await notion.databases.query({ database_id: databaseId });
 
-        for (const page of response.results) {
-            const properties = page.properties;
+    for (const page of response.results) {
+      const properties = page.properties;
 
-            const titleObj = properties[titleProperty];
-            const dateObj = properties[dateProperty];
+      const titleObj = properties[titleProperty];
+      const dateObj = properties[dateProperty];
 
-            if (
-                titleObj &&
-                titleObj.type === "title" &&
-                titleObj.title.length > 0 &&
-                dateObj &&
-                dateObj.type === "date" &&
-                dateObj.date &&
-                dateObj.date.start
-            ) {
-                calendar.createEvent({
-                    start: new Date(dateObj.date.start),
-                    end: new Date(dateObj.date.start),
-                    summary: titleObj.title[0].plain_text,
-                });
-            }
-        }
+      if (
+        titleObj &&
+        titleObj.type === "title" &&
+        titleObj.title.length > 0 &&
+        dateObj &&
+        dateObj.type === "date" &&
+        dateObj.date &&
+        dateObj.date.start
+      ) {
+        const startDate = new Date(dateObj.date.start);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 1); // ICS DTEND is exclusive
 
-        res.setHeader("Content-Type", "text/calendar");
-        calendar.serve(res);
-    } catch (error) {
-        console.error("Chyba při generování kalendáře:", error);
-        res.status(500).send("Chyba při generování kalendáře.");
+        calendar.createEvent({
+          start: startDate.toISOString().split("T")[0], // YYYY-MM-DD
+          end: endDate.toISOString().split("T")[0],
+          summary: titleObj.title[0].plain_text,
+          allDay: true,
+        });
+      }
     }
+
+    res.setHeader("Content-Type", "text/calendar");
+    calendar.serve(res);
+  } catch (error) {
+    console.error("Chyba při generování kalendáře:", error);
+    res.status(500).send("Chyba při generování kalendáře.");
+  }
 });
 
 app.get("/", (req, res) => {
-    res.send("Notion to ICS běží. Přidej /calendar.ics pro export.");
+  res.send("Notion to ICS běží. Přidej /calendar.ics pro export.");
 });
 
 app.listen(port, () => {
-    console.log(`Server běží na http://localhost:${port}`);
+  console.log(`Server běží na http://localhost:${port}`);
 });
