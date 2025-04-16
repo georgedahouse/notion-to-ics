@@ -1,51 +1,57 @@
-// 🌱 Notion → iCal .ics generator
-// Ready-to-deploy on Vercel (Node.js + Express + ical-generator)
-
-const express = require("express");
 const { Client } = require("@notionhq/client");
 const ical = require("ical-generator");
+const express = require("express");
 require("dotenv").config();
 
 const app = express();
-const notion = new Client({ auth: process.env.NOTION_TOKEN });
+const port = process.env.PORT || 3000;
 
-const DATABASE_ID = process.env.NOTION_DATABASE_ID;
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
+const databaseId = process.env.NOTION_DATABASE_ID;
+const dateProperty = process.env.DATE_PROPERTY_NAME || "Datum";
+const titleProperty = process.env.TITLE_PROPERTY_NAME || "Návyk";
 
 app.get("/calendar.ics", async (req, res) => {
-  const calendar = ical({ name: "Notion Habits" });
+    const calendar = ical({ name: "Notion Habits" });
 
-  try {
-    const response = await notion.databases.query({
-      database_id: DATABASE_ID,
-    });
+    try {
+        const response = await notion.databases.query({ database_id: databaseId });
 
-    response.results.forEach((page) => {
-      const props = page.properties;
+        for (const page of response.results) {
+            const properties = page.properties;
 
-      const nameProp = props["Návyk"];
-      const dateProp = props["Tento týden"];
+            const titleObj = properties[titleProperty];
+            const dateObj = properties[dateProperty];
 
-      const title = nameProp?.title?.[0]?.plain_text ?? "Návyk";
+            if (
+                titleObj &&
+                titleObj.type === "title" &&
+                titleObj.title.length > 0 &&
+                dateObj &&
+                dateObj.type === "date" &&
+                dateObj.date &&
+                dateObj.date.start
+            ) {
+                calendar.createEvent({
+                    start: new Date(dateObj.date.start),
+                    end: new Date(dateObj.date.start),
+                    summary: titleObj.title[0].plain_text,
+                });
+            }
+        }
 
-      if (dateProp?.date?.start) {
-        calendar.createEvent({
-          start: new Date(dateProp.date.start),
-          end: new Date(dateProp.date.start),
-          summary: title,
-          uid: page.id,
-        });
-      }
-    });
-
-    res.setHeader("Content-Type", "text/calendar");
-    calendar.serve(res);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Chyba při generování kalendáře.");
-  }
+        res.setHeader("Content-Type", "text/calendar");
+        calendar.serve(res);
+    } catch (error) {
+        console.error("Chyba při generování kalendáře:", error);
+        res.status(500).send("Chyba při generování kalendáře.");
+    }
 });
 
-const port = process.env.PORT || 3000;
+app.get("/", (req, res) => {
+    res.send("Notion to ICS běží. Přidej /calendar.ics pro export.");
+});
+
 app.listen(port, () => {
-  console.log(`Running on http://localhost:${port}`);
+    console.log(`Server běží na http://localhost:${port}`);
 });
