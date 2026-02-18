@@ -23,7 +23,7 @@ function getText(props, name) {
   if (p.type === "rich_text") return (p.rich_text?.[0]?.plain_text || "").trim();
   if (p.type === "title") return (p.title?.[0]?.plain_text || "").trim();
   if (p.type === "select") return (p.select?.name || "").trim();
-  if (p.type === "multi_select") return (p.multi_select?.map(x => x.name).join(", ") || "").trim();
+  if (p.type === "multi_select") return (p.multi_select?.map((x) => x.name).join(", ") || "").trim();
   return "";
 }
 
@@ -44,20 +44,29 @@ function getDateStart(props, name) {
 function formatCZK(n) {
   if (n === null || n === undefined) return "";
   try {
-    return new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
+    return new Intl.NumberFormat("cs-CZ", {
+      style: "currency",
+      currency: "CZK",
+      maximumFractionDigits: 0,
+    }).format(n);
   } catch {
     return `${n} CZK`;
   }
 }
 
-// ---- NAVYKY (nechávám jak máš, jen route název) ----
+// ---- NAVYKY ----
 app.get("/navyky.ics", async (req, res) => {
   const calendar = ical({ name: "Notion Návyky" });
 
   try {
-    const databaseId = process.env.NOTION_NAVYKY_DATABASE_ID || process.env.NOTION_DATABASE_ID;
+    const databaseId =
+      process.env.NOTION_NAVYKY_DATABASE_ID || process.env.NOTION_DATABASE_ID;
     const dateProperty = process.env.DATE_PROPERTY_NAME || "Datum";
     const titleProperty = process.env.TITLE_PROPERTY_NAME || "Návyk";
+
+    if (!databaseId) {
+      return res.status(500).send("Chybí env var: NOTION_NAVYKY_DATABASE_ID (nebo NOTION_DATABASE_ID)");
+    }
 
     const response = await notion.databases.query({ database_id: databaseId });
 
@@ -66,12 +75,11 @@ app.get("/navyky.ics", async (req, res) => {
 
       const title = getTitle(props, titleProperty);
       const start = getDateStart(props, dateProperty);
-
       if (!title || !start) continue;
 
       const startDate = new Date(start);
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 1); // all-day exclusive
+      endDate.setDate(endDate.getDate() + 1);
 
       calendar.createEvent({
         start: startDate.toISOString().split("T")[0],
@@ -89,6 +97,64 @@ app.get("/navyky.ics", async (req, res) => {
   }
 });
 
+// ---- MATURAKY ----
+app.get("/maturaky.ics", async (req, res) => {
+  const calendar = ical({ name: "Notion Maturáky" });
+
+  try {
+    const databaseId = process.env.NOTION_MATURAKY_DATABASE_ID;
+    if (!databaseId) {
+      return res.status(500).send("Chybí env var: NOTION_MATURAKY_DATABASE_ID");
+    }
+
+    // názvy properties v Notion DB "Maturitní plesy" (podle tvého screenu)
+    const dateProp = "Datum";
+    const titleProp = "Místo konání"; // je to title sloupec (první)
+    const mestoProp = "Město";
+    const variantaProp = "Varianta";
+    const zalohaProp = "Záloha";
+
+    const response = await notion.databases.query({ database_id: databaseId });
+
+    for (const page of response.results) {
+      const props = page.properties;
+
+      const start = getDateStart(props, dateProp);
+      if (!start) continue;
+
+      const title = getTitle(props, titleProp) || "Maturák";
+
+      const mesto = getText(props, mestoProp);
+      const varianta = getText(props, variantaProp);
+      const zaloha = getText(props, zalohaProp);
+
+      const descriptionLines = [];
+      if (title) descriptionLines.push(`Místo konání: ${title}`);
+      if (mesto) descriptionLines.push(`Město: ${mesto}`);
+      if (varianta) descriptionLines.push(`Varianta: ${varianta}`);
+      if (zaloha) descriptionLines.push(`Záloha: ${zaloha}`);
+
+      const startDate = new Date(start);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 1);
+
+      calendar.createEvent({
+        start: startDate.toISOString().split("T")[0],
+        end: endDate.toISOString().split("T")[0],
+        summary: title,
+        description: descriptionLines.join("\n"),
+        allDay: true,
+      });
+    }
+
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    calendar.serve(res);
+  } catch (error) {
+    console.error("Chyba při generování maturáků:", error);
+    res.status(500).send("Chyba při generování maturáků.");
+  }
+});
+
 // ---- HRANI ----
 app.get("/hrani.ics", async (req, res) => {
   const calendar = ical({ name: "Notion Hraní" });
@@ -99,11 +165,10 @@ app.get("/hrani.ics", async (req, res) => {
       return res.status(500).send("Chybí env var: NOTION_HRANI_DATABASE_ID");
     }
 
-    // názvy properties v Notion DB "Hraní" podle tvého screenu
+    // názvy properties v Notion DB "Hraní"
     const dateProp = "Datum";
     const klubProp = "Klub";
     const mestoProp = "Město";
-    const cenaProp = "Cena";
     const poznamkaProp = "Poznámka";
 
     const response = await notion.databases.query({ database_id: databaseId });
@@ -120,14 +185,9 @@ app.get("/hrani.ics", async (req, res) => {
       // Title: "Klub - Město"
       const summary = [klub, mesto].filter(Boolean).join(" - ") || "Hraní";
 
-      // Description: Cena + Poznámka
-      const cenaNum = getNumber(props, cenaProp);
-      const cena = cenaNum !== null ? formatCZK(cenaNum) : "";
+      // Description: jen Poznámka
       const poznamka = getText(props, poznamkaProp);
-
-      const descriptionLines = [];
-      if (cena) descriptionLines.push(`Cena: ${cena}`);
-      if (poznamka) descriptionLines.push(`Poznámka: ${poznamka}`);
+      const description = poznamka ? `Poznámka: ${poznamka}` : "";
 
       const startDate = new Date(start);
       const endDate = new Date(startDate);
@@ -137,7 +197,7 @@ app.get("/hrani.ics", async (req, res) => {
         start: startDate.toISOString().split("T")[0],
         end: endDate.toISOString().split("T")[0],
         summary,
-        description: descriptionLines.join("\n"),
+        description,
         allDay: true,
       });
     }
