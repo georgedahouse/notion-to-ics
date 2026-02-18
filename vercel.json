@@ -4,7 +4,7 @@
     { "src": "index.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/calendar.ics", "dest": "/index.js" },
+    { "src": "/navyky.ics", "dest": "/index.js" },
     { "src": "/maturaky.ics", "dest": "/index.js" }
   ]
 }
