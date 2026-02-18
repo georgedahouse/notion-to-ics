@@ -4,6 +4,6 @@
   "routes": [
     { "src": "/navyky\\.ics", "dest": "/index.js" },
     { "src": "/maturaky\\.ics", "dest": "/index.js" },
-    { "src": "/(.*)", "dest": "/index.js" }
+    { "src": "/hrani\\.ics", "dest": "/index.js" }
   ]
 }
