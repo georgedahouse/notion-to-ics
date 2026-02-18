@@ -1,10 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "index.js", "use": "@vercel/node" }
-  ],
+  "builds": [{ "src": "index.js", "use": "@vercel/node" }],
   "routes": [
-    { "src": "/navyky.ics", "dest": "/index.js" },
-    { "src": "/maturaky.ics", "dest": "/index.js" }
+    { "src": "/navyky\\.ics", "dest": "/index.js" },
+    { "src": "/maturaky\\.ics", "dest": "/index.js" },
+    { "src": "/(.*)", "dest": "/index.js" }
   ]
 }
